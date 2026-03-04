@@ -12,6 +12,7 @@
 
 int leftMotorSpeed = 0;
 int rightMotorSpeed = 0;
+int rumbleActive = 1;
 
 int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -100,6 +101,16 @@ int connect_wiimote(struct wiimote_t **wiimotes) {
     return 1;
 }
 
+void handle_rumble(struct wiimote_t *controller) {
+    if(rumbleActive) {
+        wiiuse_rumble(controller, 1);
+    }
+}
+
+void change_rumble_status() {
+    rumbleActive = !rumbleActive;
+}
+
 void handle_acceleration(struct wiimote_t *controller, int acceleration) {
     //TODO: handle torque vectoring
     if (acceleration > 0) {
@@ -141,12 +152,14 @@ int handle_event(struct wiimote_t *controller) {
         return 0; // Return 0 to indicate that the program should exit
     } else if (IS_PRESSED(controller, WIIMOTE_BUTTON_ONE)) {
         //printf("Backward button pressed\n");
-        wiiuse_rumble(controller, 1);
+        handle_rumble(controller);
         handle_acceleration(controller, -50);
     } else if (IS_PRESSED(controller, WIIMOTE_BUTTON_TWO)) {
         //printf("Forward button pressed\n");
-        wiiuse_rumble(controller, 1);
+        handle_rumble(controller);
         handle_acceleration(controller, 50);
+    } else if (IS_JUST_PRESSED(controller, WIIMOTE_BUTTON_PLUS)) {
+        change_rumble_status();
     } else {
         wiiuse_rumble(controller, 0); 
         handle_acceleration(controller, 0);
@@ -208,7 +221,7 @@ int main() {
 
         if (wiiuse_poll(wiimotes, MAX_WIIMOTES)) {
             clear_terminal();
-            printf("Left Motor Speed: %d, Right Motor Speed: %d\n", leftMotorSpeed, rightMotorSpeed);
+            printf("Left Motor Speed: %d, Right Motor Speed: %d Rumble: %d\n", leftMotorSpeed, rightMotorSpeed, rumbleActive);
             if(!handle_event(controller)) {
                 break;
             }
