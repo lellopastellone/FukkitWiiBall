@@ -203,9 +203,7 @@ int main() {
         printf("Failed to setup GPIO\n");
         return 1;
     }*/
-
-    int rightSpeed = 0;
-    int leftSpeed = 0;
+   
     struct wiimote_t **wiimotes = wiiuse_init(MAX_WIIMOTES);;
     struct wiimote_t *controller = wiimotes[0];
 
