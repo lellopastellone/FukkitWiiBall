@@ -166,7 +166,7 @@ int handle_event(struct wiimote_t *controller) {
     return 1; // Return 1 to indicate that the program should continue running
 }
 
-int verify_acceleration(struct wiimote_t *controller) {
+int verify_accelerometer(struct wiimote_t *controller) {
     if (!controller) {
         return 0;
     }
