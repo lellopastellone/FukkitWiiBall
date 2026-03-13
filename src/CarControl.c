@@ -3,16 +3,17 @@
 #include <unistd.h>
 #include "wiiuse.h"
 
-#define LEFT_MOTOR_PIN 17 //TODO: set the correct GPIO pin for the left motor
-#define RIGHT_MOTOR_PIN 18 //TODO: set the correct GPIO pin for the right motor
-#define PWM_FREQUENCY 20000 // 20 kHz for motor control
-#define PWM_RANGE 255 // 8-bit resolution for PWM
-#define CONNECT_PIN 1 //TODO: set the correct GPIO pin for the connect button
+#define RIGHT_MOTOR_PIN_A 17
+#define RIGHT_MOTOR_PIN_B 18
+#define LEFT_MOTOR_PIN_A 22
+#define LEFT_MOTOR_PIN_B 23
 #define MAX_WIIMOTES 1
+#define EPSILON 0.0001
 
 int leftMotorSpeed = 0;
 int rightMotorSpeed = 0;
 int rumbleActive = 1;
+struct wiimote_t **wiimotes;
 
 int clamp_int(int v, int lo, int hi) {
     if (v < lo) return lo;
@@ -34,15 +35,11 @@ int setup() {
         return 0;
     }
 
-    gpioSetMode(LEFT_MOTOR_PIN, PI_OUTPUT);
-    gpioSetMode(RIGHT_MOTOR_PIN, PI_OUTPUT);
-    gpioSetMode(CONNECT_PIN, PI_INPUT);
-
-    gpioSetPWMfrequency(LEFT_MOTOR_PIN, PWM_FREQUENCY);
-    gpioSetPWMfrequency(RIGHT_MOTOR_PIN, PWM_FREQUENCY);
-
-    gpioSetPWMrange(LEFT_MOTOR_PIN, PWM_RANGE);
-    gpioSetPWMrange(RIGHT_MOTOR_PIN, PWM_RANGE);
+    gpioSetMode(LEFT_MOTOR_PIN_A, PI_OUTPUT);
+    gpioSetMode(LEFT_MOTOR_PIN_B, PI_OUTPUT);
+    
+    gpioSetMode(RIGHT_MOTOR_PIN_A, PI_OUTPUT);
+    gpioSetMode(RIGHT_MOTOR_PIN_B, PI_OUTPUT);
     
     return 1;
 }
@@ -79,13 +76,10 @@ void setup_controller(struct wiimote_t *controller) {
  * Prompts the user to put the Wiimote in discoverable mode (press 1+2), calls wiiuse_find with a
  * 5-second timeout, and then calls wiiuse_connect. If no devices are found or no connections succeed,
  * the function returns 0. On success it returns 1.
- * 
- * @param wiimotes Pointer to an array of wiimote_t* that will be populated by wiiuse_find/wiiuse_connect.
- *                  The caller must provide an array capable of holding MAX_WIIMOTES pointers.
  *
  * @return 1 if at least one Wiimote was found and successfully connected; 0 otherwise.
  */
-int connect_wiimote(struct wiimote_t **wiimotes) {
+int connect_wiimote() {
     int connected, found;
     printf("Press 1+2 on your Wiimote now...\n");
     found = wiiuse_find(wiimotes, MAX_WIIMOTES, 5);
@@ -109,6 +103,10 @@ void handle_rumble(struct wiimote_t *controller) {
 
 void change_rumble_status() {
     rumbleActive = !rumbleActive;
+}
+
+int handle_poll_controller() {
+    return wiiuse_poll(wiimotes, MAX_WIIMOTES);
 }
 
 void handle_acceleration(struct wiimote_t *controller, int acceleration) {
@@ -168,33 +166,48 @@ int handle_event(struct wiimote_t *controller) {
     return 1; // Return 1 to indicate that the program should continue running
 }
 
+int verify_acceleration(struct wiimote_t *controller) {
+    if (!controller) {
+        return 0;
+    }
+    handle_poll_controller();
+    return  controller->orient.pitch == 0.0f;
+}
+
 /**
- * @brief Handle the Wiimote connection phase and initialize the controller on success.
+ * @brief Attempt to discover and connect one Wiimote and initialize a controller.
  *
  * @details
- * Calls connect_wiimote() to attempt to find and connect to one or more Wiimotes. If the
- * connection attempt fails, an error message is printed to stdout. If a connection is
- * established, a success message is printed and setup_controller() is invoked to perform
- * controller-specific initialization for the provided controller object.
+ * This routine delegates device discovery and connection to connect_wiimote(). If
+ * connect_wiimote() fails to find or open a Wiimote, an error message is printed to stdout
+ * and no further initialization is performed. On successful connection, a success message is
+ * printed and setup_controller() is invoked to perform controller-specific initialization for
+ * the provided controller object.
  *
- * This function delegates device discovery/connection and population of the wiimotes array
- * to connect_wiimote(); it does not itself manage allocation or cleanup of Wiimote objects.
+ * The function does not allocate or free wiimote objects itself; it relies on
+ * connect_wiimote() to populate any wiimote array or related structures and on callers or
+ * other subsystems to manage their lifetime.
  *
- * @param controller Pointer to a wiimote_t structure that will be passed to setup_controller()
- *                   for initialization after a successful connection. Must be valid when
- *                   setup_controller() is called.
+ * @param controller Pointer to a valid wiimote_t structure which will be passed to
+ *                   setup_controller() for initialization after a successful connection.
+ *                   The caller must ensure this pointer remains valid for the duration of
+ *                   setup_controller() and any subsequent use.
  *
- * @param wiimotes   Pointer to an array (or pointer-to-pointer) of wiimote_t pointers that is
- *                   forwarded to connect_wiimote(). The connect_wiimote() implementation is
- *                   expected to populate this array on success; the caller is responsible for
- *                   providing sufficient storage and for any subsequent cleanup.
+ * @note This function prints status and error messages to stdout for connection success/failure.
+ * @note Side effects include invoking setup_controller() and any initialization it performs.
  */
-void handle_connection_phase(struct wiimote_t *controller, struct wiimote_t **wiimotes) {
-    if(!connect_wiimote(wiimotes)) {
+void handle_connection_phase(struct wiimote_t *controller) {
+    if(!connect_wiimote()) {
         printf("Failed to connect to Wiimote\n");
     } else {
         printf("Wiimote connected!\n");
         setup_controller(controller);
+        printf("Verify connection\n");
+        while(verify_acceleration(controller) && WIIMOTE_IS_CONNECTED(controller)) {
+            printf("Fixing connection...\n");
+            wiiuse_set_leds(controller, WIIMOTE_LED_2);
+            sleep(1);
+        }
     }
 }
 
@@ -204,20 +217,19 @@ int main() {
         return 1;
     }*/
    
-    struct wiimote_t **wiimotes = wiiuse_init(MAX_WIIMOTES);;
+    wiimotes = wiiuse_init(MAX_WIIMOTES);;
     struct wiimote_t *controller = wiimotes[0];
 
 
 
     while(1) {
-        if (!WIIMOTE_IS_CONNECTED(controller)) {
+        while(!WIIMOTE_IS_CONNECTED(controller)) {
             printf("No Wiimote connected. Attempting to connect...\n");
-            handle_connection_phase(controller, wiimotes);
+            handle_connection_phase(controller);
             wiiuse_set_leds(controller, WIIMOTE_LED_1);
-
         }
 
-        if (wiiuse_poll(wiimotes, MAX_WIIMOTES)) {
+        if (handle_poll_controller()) {
             clear_terminal();
             printf("Left Motor Speed: %d, Right Motor Speed: %d Rumble: %d\n", leftMotorSpeed, rightMotorSpeed, rumbleActive);
             if(!handle_event(controller)) {
