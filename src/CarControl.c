@@ -64,7 +64,7 @@ int setup() {
  */
 void setup_controller(struct wiimote_t *controller) {
     wiiuse_rumble(controller, 1);
-    sleep(1);
+    usleep(500000);
     wiiuse_rumble(controller, 0);
     wiiuse_motion_sensing(controller, 1);
 }
@@ -203,10 +203,13 @@ void handle_connection_phase(struct wiimote_t *controller) {
         printf("Wiimote connected!\n");
         setup_controller(controller);
         printf("Verify connection\n");
-        while(verify_acceleration(controller) && WIIMOTE_IS_CONNECTED(controller)) {
+        while(verify_accelerometer(controller) && WIIMOTE_IS_CONNECTED(controller)) {
             printf("Fixing connection...\n");
+            printf("Pitch: %f\n", controller->orient.pitch);
             wiiuse_set_leds(controller, WIIMOTE_LED_2);
+            wiiuse_motion_sensing(controller, 0);
             sleep(1);
+            wiiuse_motion_sensing(controller, 1);
         }
     }
 }
