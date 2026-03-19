@@ -67,32 +67,6 @@ void clear_terminal() {
  ******************************************************************************/
 
 /**
- * @brief Initializes the GPIO library and sets up motor control pins.
- * 
- * This function attempts to initialize the pigpio library. If initialization
- * fails, it prints an error message to stdout and returns 0 (false).
- * Upon successful initialization, it configures the GPIO pins for both the
- * left and right motors as output pins.
- * 
- * @return int Returns 1 on successful initialization, or 0 if the GPIO
- *             initialization fails.
- */
-int setup() {
-    if (gpioInitialise() < 0) {
-        printf("Failed to initialize GPIO\n");
-        return 0;
-    }
-
-    gpioSetMode(LEFT_MOTOR_PIN_A, PI_OUTPUT);
-    gpioSetMode(LEFT_MOTOR_PIN_B, PI_OUTPUT);
-    
-    gpioSetMode(RIGHT_MOTOR_PIN_A, PI_OUTPUT);
-    gpioSetMode(RIGHT_MOTOR_PIN_B, PI_OUTPUT);
-    
-    return 1;
-}
-
-/**
  * @brief Configure a Wii controller on startup.
  *
  * @details
@@ -200,27 +174,6 @@ int* calculate_steering_speeds(struct wiimote_t *controller) {
     return (int[]){left, right};
 }
 
-/**
- * @brief Updates the speeds of the left and right motors by setting PWM values on the specified GPIO pins.
- *
- * This function controls a differential drive system by setting the PWM duty cycle for active motor pins
- * while ensuring the inactive motor pins are turned off (0 duty cycle). This is typically used to handle
- * direction changes where one set of pins drives forward and another set drives backward, or to simply
- * apply speed to the currently active direction.
- *
- * @param leftActiveMotorPin The GPIO pin number for the active left motor channel.
- * @param rightActiveMotorPin The GPIO pin number for the active right motor channel.
- * @param leftDeactiveMotorPin The GPIO pin number for the inactive left motor channel (will be set to 0).
- * @param rightDeactiveMotorPin The GPIO pin number for the inactive right motor channel (will be set to 0).
- * @param leftSpeed The PWM duty cycle value (speed) for the left motor.
- * @param rightSpeed The PWM duty cycle value (speed) for the right motor.
- */
-void update_motor_speeds(int leftActiveMotorPin, int rightActiveMotorPin, int leftDeactiveMotorPin, int rightDeactiveMotorPin, int leftSpeed, int rightSpeed) {
-    gpioPWM(leftActiveMotorPin, leftSpeed);
-    gpioPWM(rightActiveMotorPin, rightSpeed);
-    gpioPWM(leftDeactiveMotorPin, 0);
-    gpioPWM(rightDeactiveMotorPin, 0);
-}
 
 /**
  * @brief Handles the acceleration and direction control of the car based on Wiimote input.
@@ -236,9 +189,7 @@ void update_motor_speeds(int leftActiveMotorPin, int rightActiveMotorPin, int le
  *                  - REVERSE: Moves the car backward with calculated steering.
  *                  - Any other value results in stopping the motors.
  *
- * @note This function updates the global variables leftMotorSpeed and rightMotorSpeed.
- *       It assumes the existence of helper functions calculate_steering_speeds and update_motor_speeds,
- *       as well as motor pin definitions (LEFT_MOTOR_PIN_A, etc.).
+ * @note This function updates the global variables leftMotorSpeed and rightMotorSpeed (only for demonstration purposes).
  */
 void handle_acceleration(struct wiimote_t *controller, int direction) {
     int *speeds = calculate_steering_speeds(controller);
@@ -247,19 +198,16 @@ void handle_acceleration(struct wiimote_t *controller, int direction) {
 
     switch(direction) {
         case FORWARD:
-            update_motor_speeds(LEFT_MOTOR_PIN_A, RIGHT_MOTOR_PIN_A, LEFT_MOTOR_PIN_B, RIGHT_MOTOR_PIN_B, left, right);
             leftMotorSpeed = left;
             rightMotorSpeed = right;
             break;
 
         case REVERSE:
-            update_motor_speeds(LEFT_MOTOR_PIN_B, RIGHT_MOTOR_PIN_B, LEFT_MOTOR_PIN_A, RIGHT_MOTOR_PIN_A, left, right);
             leftMotorSpeed = -left;
             rightMotorSpeed = -right;
             break;
 
         default:
-            update_motor_speeds(LEFT_MOTOR_PIN_A, RIGHT_MOTOR_PIN_A, LEFT_MOTOR_PIN_B, RIGHT_MOTOR_PIN_B, 0, 0);
             leftMotorSpeed = 0;
             rightMotorSpeed = 0;
             break;
@@ -384,11 +332,6 @@ int handle_event(struct wiimote_t *controller) {
 }
 
 int main() {
-    if(!setup()) {
-        printf("Failed to setup GPIO\n");
-        return 1;
-    }
-   
     wiimotes = wiiuse_init(MAX_WIIMOTES);;
     struct wiimote_t *controller = wiimotes[0];
 
