@@ -164,8 +164,7 @@ void handle_rumble(struct wiimote_t *controller) {
  *
  * This function determines steering by analyzing the pitch of the connected Wiimote.
  * It applies a deadzone to ignore small movements, normalizes the pitch value, and
- * uses a cubic curve (steering^3) to provide finer control at low angles and
- * aggressive turning at high angles.
+ * uses a linear function to provide proportional steering.
  *
  * The resulting speed delta is applied inversely to the left and right motors
  * relative to a base speed to initiate a turn.
@@ -183,9 +182,7 @@ int* calculate_steering_speeds(struct wiimote_t *controller) {
     if (fabs(pitch) < PITCH_DEADZONE)
         pitch = 0;
 
-    float normalized = clamp_int((int)pitch, -100, 100) / 100.0;
-
-    float steering = normalized * normalized * normalized;
+    float steering = clamp_int((int)pitch, -100, 100) / 100.0;
 
     int maxDelta = baseSpeed - PWM_MIN;
 
