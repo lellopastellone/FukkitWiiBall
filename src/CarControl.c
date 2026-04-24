@@ -5,12 +5,10 @@
 #include <math.h>
 #include "wiiuse.h"
 
-// TODO: Docs
-
-#define RIGHT_MOTOR_PIN_A 17
-#define RIGHT_MOTOR_PIN_B 18
-#define LEFT_MOTOR_PIN_A 22
-#define LEFT_MOTOR_PIN_B 23
+#define RIGHT_MOTOR_PIN_A 22
+#define RIGHT_MOTOR_PIN_B 23
+#define LEFT_MOTOR_PIN_A 18
+#define LEFT_MOTOR_PIN_B 17
 #define MAX_WIIMOTES 1
 #define FORWARD 1
 #define REVERSE -1
